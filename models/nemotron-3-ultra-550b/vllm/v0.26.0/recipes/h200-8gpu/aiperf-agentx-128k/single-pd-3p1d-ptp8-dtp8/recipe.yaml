@@ -1,13 +1,14 @@
-recipe_version: 3
+schema_version: 3
+recipe_id: nemotron-3-ultra-550b-h200-pd-split
 model_id: nemotron-3-ultra-550b
-stack: vllm
-stack_version: v0.26.0
-hardware_profile: h200-8gpu
+platform:
+  stack: vllm
+  version: v0.26.0
+hardware_profile: hardware-profiles/h200-8gpu.yaml
 workload_profile: aiperf-agentx-128k
 deployment_mode: single-pd-3p1d-ptp8-dtp8
-deployment_scope: multi-node
-
 optimization_intent: latency
+maturity: day-zero
 
 description: |
   Nemotron-3-Ultra-550B deployed on H200 cluster using Prefill/Decode (PD) disaggregation.
@@ -31,25 +32,19 @@ description: |
   collaborative workflows. PD split allows prefill to handle large contexts efficiently while
   decode remains dedicated to low-latency token generation.
 
-compatibility:
-  vllm: ">=0.26.0"
-  deployment: "leaderworkerset"
-  accelerators:
-    - type: nvidia-h200
-      count: 4
-      required: true
+deployment:
+  scope: multi-node
+  parallelism:
+    tensor: 8
+  manifests:
+    - path: "manifests/nemotron-3-ultra-550b-h200-pd-prefill.yaml"
+      kind: "LeaderWorkerSet"
+    - path: "manifests/nemotron-3-ultra-550b-h200-pd-decode.yaml"
+      kind: "LeaderWorkerSet"
+    - path: "manifests/nemotron-3-ultra-550b-h200-pd-epp-configmap.yaml"
+      kind: "ConfigMap"
 
-match:
-  hardware_profile: h200-8gpu
-
-manifest_references:
-  - nemotron-3-ultra-550b-h200-pd-prefill.yaml
-  - nemotron-3-ultra-550b-h200-pd-decode.yaml
-  - nemotron-3-ultra-550b-h200-pd-epp-configmap.yaml
-
-benchmark_references: []
-
-result_references: []
+benchmark_runs: []
 
 tags:
   - long-context

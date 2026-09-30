@@ -1,16 +1,15 @@
+schema_version: 1
 model_id: nemotron-3-ultra-550b
+name: "Nemotron-3-Ultra 550B"
 family: Nemotron
-parameter_count: 550B
-description: "NVIDIA Nemotron-3-Ultra 550B instruction-tuned model with FP8 quantization"
+parameters: "550B"
 huggingface_id: nvidia/Nemotron-3-Ultra-550B-A55B-FP8-block
-huggingface_alias: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
 license: "NVIDIA Nemotron Terms of Use"
-access: gated
-quantization: fp8-block
-available_quantizations:
-  - fp8-block
-  - bf16 (requires 1.4TB VRAM)
-notes: |
-  Nemotron-3-Ultra is NVIDIA's latest instruction-tuned LLM with support for very long contexts (262K tokens).
-  FP8 quantization reduces model size from ~1.1TB to ~275GB per GPU.
-  Optimized for agentic workflows with multi-turn conversations and dynamic tool use.
+access:
+  type: gated
+  note: "Gated model on HuggingFace"
+quantizations:
+  - name: "fp8-block"
+    description: "FP8 block quantization, ~275GB per GPU, reduces model size from ~1.1TB"
+  - name: "bf16"
+    description: "BrainFloat16, ~1.4TB per GPU"
