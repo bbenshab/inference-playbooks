@@ -2,11 +2,8 @@ apiVersion: leaderworkerset.x-k8s.io/v1
 kind: LeaderWorkerSet
 metadata:
   name: decode-tp8
-  namespace: serveit
   labels:
     app: llm-d
-    component: serveit-test
-    test-id: single-pd-3p1d-ptp8-dtp8
     architecture: pd
     role: decode
 spec:
@@ -20,17 +17,8 @@ spec:
           llm-d.ai/inference-serving: "true"
           llm-d.ai/model: RedHatAI-NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block
           llm-d.ai/role: decode
-          llm-d.ai/guide: serveit-pd
-          llm-d.ai/test-id: single-pd-3p1d-ptp8-dtp8
       spec:
         serviceAccountName: llm-d-modelserver
-        tolerations:
-          - key: node.kubernetes.io/disk-pressure
-            operator: Exists
-            effect: NoSchedule
-          - key: node.kubernetes.io/memory-pressure
-            operator: Exists
-            effect: NoSchedule
         volumes:
           - name: dshm
             emptyDir:
@@ -51,7 +39,7 @@ spec:
               path: /dev/infiniband
         initContainers:
           - name: routing-proxy
-            image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:main
+            image: ghcr.io/llm-d/llm-d-router-disagg-sidecar:v0.11.0
             imagePullPolicy: Always
             args:
               - --port=8000
@@ -97,19 +85,14 @@ spec:
                   echo "--- Loaded RDMA environment ---"
                 fi
 
-                echo "========================================="
-                echo "ServeIt Studio Test: single-pd-3p1d-ptp8-dtp8"
-                echo "Architecture: PD (Decode)"
-                echo "Model: RedHatAI/NVIDIA-Nemotron-3-Ultra-550B-A55B-FP8-block"
-                echo "TP: 8"
-                echo "NCCL_IB_HCA: ${NCCL_IB_HCA}"
+                echo "NCCL_IB_HCA: ${NCCL_IB_HCA:-not set}"
                 echo "UCX_NET_DEVICES: ${UCX_NET_DEVICES:-not set}"
-                echo "NCCL_SOCKET_IFNAME: ${NCCL_SOCKET_IFNAME:-not set}"
-                echo "========================================="
 
+                # Fail fast if RDMA discovery did not run — NCCL over sockets
+                # cannot sustain TP8 KV-transfer traffic on this profile.
                 if [ -z "${UCX_NET_DEVICES:-}" ] || [ -z "${NCCL_IB_HCA:-}" ]; then
-                  echo "FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-}). Sleeping to prevent node crash."
-                  sleep infinity
+                  echo "FATAL: RDMA env vars not set (UCX_NET_DEVICES=${UCX_NET_DEVICES:-}, NCCL_IB_HCA=${NCCL_IB_HCA:-})."
+                  exit 1
                 fi
 
                 # Patch vllm#43396: FP8 MoE CUTLASS OOB at batch 8192
@@ -135,15 +118,12 @@ spec:
                   --enable-auto-tool-choice \
                   --tool-call-parser qwen3_coder \
                   --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 96}' \
-                  --disable-uvicorn-access-log \
-                  || sleep infinity
+                  --disable-uvicorn-access-log
             env:
               - name: VLLM_NIXL_SIDE_CHANNEL_HOST
                 valueFrom:
                   fieldRef:
                     fieldPath: status.podIP
-              - name: NCCL_IB_HCA
-                value: "mlx"
               - name: HF_TOKEN
                 valueFrom:
                   secretKeyRef:

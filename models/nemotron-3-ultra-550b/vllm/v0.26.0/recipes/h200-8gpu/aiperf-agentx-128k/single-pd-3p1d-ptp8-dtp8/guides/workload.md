@@ -50,9 +50,9 @@ This workload benefits from **Prefill/Decode disaggregation** because:
 ## Expected Performance
 
 ### Throughput
-- ~30-40 requests/sec at steady state (30 users × 1.2 turns/sec)
+- ~2 requests/sec at steady state (30 users with a 15s mean turn delay) — unmeasured estimate
 - Prefill: 200+ tokens/sec per GPU (parallelizable)
-- Decode: 1-2 tokens/sec per GPU (sequential)
+- Decode: 10-20 tokens/sec per stream at the stated 50-100ms per-token latency — unmeasured estimate
 
 ### Latency
 - **TTFT (Time-to-First-Token)**: 500-2000ms (target: minimize this)

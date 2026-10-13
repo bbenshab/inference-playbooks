@@ -43,7 +43,7 @@ Optimized deployment pattern for [NVIDIA Nemotron-3-Ultra-550B-A55B-FP8-block](h
 - Kubernetes/OpenShift cluster with at least 4 nodes
 - 8 GPUs per node (A100 80GB, H100, or better)
 - vLLM v0.26.0 container image
-- HuggingFace token secret (`hf-token`) for gated model access
+- HuggingFace token secret (`llm-d-hf-token`) for gated model access
 - llm-d router and GAIE scheduler (for EPP load balancing)
 - RDMA/RoCE network (optional, for inter-pod communication)
 
@@ -57,18 +57,19 @@ Optimized deployment pattern for [NVIDIA Nemotron-3-Ultra-550B-A55B-FP8-block](h
 
 - `nemotron-3-ultra-550b-h200-pd-prefill.yaml` — Prefill deployment (3 replicas, TP8)
 - `nemotron-3-ultra-550b-h200-pd-decode.yaml` — Decode deployment (1 replica, TP8)
-- `nemotron-3-ultra-550b-h200-pd-epp-configmap.yaml` — EPP scheduler weights for PD load balancing
+- `charts/router/values.yaml` — llm-d router chart values (EPP + InferencePool + HTTPRoute) with PD disaggregated scheduling
 
 ## Deployment Steps
 
 1. **Create HF token secret**:
    ```bash
-   kubectl create secret generic hf-token --from-literal=HF_TOKEN=hf_xxx
+   kubectl create secret generic llm-d-hf-token --from-literal=HF_TOKEN=hf_xxx
    ```
 
-2. **Apply EPP ConfigMap**:
+2. **Install the llm-d router chart** (EPP, InferencePool, and HTTPRoute):
    ```bash
-   kubectl apply -f nemotron-3-ultra-550b-h200-pd-epp-configmap.yaml
+   helm install nemotron-pd-router ./llm-d-router/config/charts/llm-d-router-gateway \
+     -n <namespace> --values charts/router/values.yaml
    ```
 
 3. **Deploy prefill pods**:
@@ -94,7 +95,7 @@ Optimized deployment pattern for [NVIDIA Nemotron-3-Ultra-550B-A55B-FP8-block](h
 - **Decode**: Optimized for sequential token generation with low latency
 - **EPP Scheduler**: Dynamically routes requests based on prefix cache hit rate, KV cache pressure, and queue depth
 - **FP8 KV Cache**: Reduces memory usage by 50% with minimal quality loss
-- **Expected Throughput**: 400-600 tokens/sec depending on context and load
+- **Expected Throughput**: unmeasured estimate; ~2 requests/sec at steady state (30 users, 15s mean turn delay)
 
 ## Troubleshooting
 

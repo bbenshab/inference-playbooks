@@ -41,8 +41,6 @@ deployment:
       kind: "LeaderWorkerSet"
     - path: "manifests/nemotron-3-ultra-550b-h200-pd-decode.yaml"
       kind: "LeaderWorkerSet"
-    - path: "manifests/nemotron-3-ultra-550b-h200-pd-epp-configmap.yaml"
-      kind: "ConfigMap"
 
 benchmark_runs: []
 

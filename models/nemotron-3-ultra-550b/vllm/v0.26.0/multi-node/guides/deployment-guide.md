@@ -7,12 +7,13 @@
 kubectl create namespace serveit
 
 # 2. Create HF token (gated model)
-kubectl create secret generic hf-token \
+kubectl create secret generic llm-d-hf-token \
   --from-literal=HF_TOKEN=hf_your_token \
   -n serveit
 
 # 3. Apply scheduler config
-kubectl apply -f nemotron-3-ultra-550b-h200-pd-epp-configmap.yaml
+helm install nemotron-pd-router ./llm-d-router/config/charts/llm-d-router-gateway \
+  -n <namespace> --values charts/router/values.yaml
 
 # 4. Deploy prefill (3 pods, 24 GPUs total)
 kubectl apply -f nemotron-3-ultra-550b-h200-pd-prefill.yaml
@@ -63,15 +64,15 @@ Each pod uses **8 GPUs** via tensor parallelism:
 
 ## EPP Scheduler Configuration
 
-The `epp-configmap.yaml` configures dynamic load balancing:
+The llm-d router chart (`charts/router/values.yaml`) configures dynamic
+load balancing with P/D disaggregated scheduling profiles:
 
-```yaml
-prefixCacheWeight: 3         # High weight for cache hits
-kvCacheWeight: 2             # Balance KV pressure
-queueWeight: 2               # Distribute queue depth
-activeRequestWeight: 2       # Track active requests
-lruCapacityPerServer: 4M     # LRU cache size per prefill pod
-```
+- `prefix-cache-scorer` weight 3 — high weight for cache hits
+- `kv-cache-utilization-scorer` weight 2 — balance KV pressure
+- `queue-scorer` weight 2 — distribute queue depth
+- `active-request-scorer` weight 2 — track active requests
+- `prefix-based-pd-decider` — runs the prefill stage only when there are
+  uncached tokens (`nonCachedTokens: 16`)
 
 This means:
 - Requests with high prefix cache hit rates are prioritized
@@ -80,31 +81,35 @@ This means:
 
 ## Pod Resource Requirements
 
-Each pod requests:
-- **CPUs**: 15 cores
-- **Memory**: 79GB
-- **GPUs**: 1 (vLLM will use all TP8 GPUs assigned to the pod)
+Each leader pod requests (matches the LWS manifests):
+- **CPUs**: 45 cores
+- **Memory**: 1711Gi
+- **GPUs**: 8 (TP8) plus one `rdma/ib` device
 
 ## Monitoring
 
 ### Pod Status
 ```bash
-kubectl get pods -n serveit -l architecture=pd -o wide
+kubectl get pods -n <namespace> -l architecture=pd -o wide
 ```
 
 ### View Logs
 ```bash
 # Prefill logs
-kubectl logs -f -n serveit -l llm-d.ai/role=prefill --all-containers=true
+kubectl logs -f -n <namespace> -l llm-d.ai/role=prefill --all-containers=true
 
 # Decode logs
 kubectl logs -f -n serveit -l llm-d.ai/role=decode --all-containers=true
 ```
 
 ### Health Checks
-- **Startup Probe**: Checks `/health` every 30s, waits up to 30min (60 failures)
-- **Readiness Probe**: Checks `/health` every 10s, fails after 5 failures
-- **Liveness Probe**: Checks `/health` every 30s, restarts after 5 failures
+- **Startup Probe**: Checks `/v1/models` every 30s, allows up to 120 failures
+  (~60 min) for the 550B cold model load
+- **Readiness Probe**: Checks `/v1/models` every 5s, fails after 3 failures
+- **Liveness Probe**: Checks `/health` every 10s, restarts after 3 failures
+
+Both prefill and decode containers define the same probe set (prefill targets
+port 8000, decode targets port 8200 behind the routing sidecar).
 
 ### Inference Health
 ```bash
@@ -173,7 +178,7 @@ kubectl describe pod <pod-name> -n serveit
 - Use smaller context windows if possible
 
 ### Optimize for Specific Workload
-Edit EPP ConfigMap weights in `nemotron-3-ultra-550b-h200-pd-epp-configmap.yaml`:
+Edit the scorer weights in `charts/router/values.yaml` (under `router.epp.pluginsCustomConfig`) and re-run `helm upgrade`:
 - **High cache hits**: Increase `prefixCacheWeight`
 - **Memory-bound**: Increase `kvCacheWeight`
 - **High concurrency**: Increase `activeRequestWeight`
